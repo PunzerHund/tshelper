@@ -42,6 +42,14 @@ def index():
     users = load_users()
     return render_template('admin.html', users=users)
 
+# ========== Выбор клиента для просмотра ==========
+@admin_bp.route('/select_client', methods=['POST'])
+@login_required(role='admin')
+def select_client():
+    client = request.form.get('client', '').strip()
+    session['selected_client'] = client
+    return redirect(request.referrer or url_for('dashboard.index'))
+
 # ========== Создание пользователя/бота ==========
 @admin_bp.route('/create_user', methods=['POST'])
 @login_required(role='admin')

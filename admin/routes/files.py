@@ -1,14 +1,21 @@
 import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory
+from .helpers import current_client_login
 
 files_bp = Blueprint('files', __name__, url_prefix='/files')
 
 def get_user_materials_dir():
-    return os.path.join('/opt/mentors', session['user']['name'], 'materials')
+    login = current_client_login()
+    if not login:
+        return ''
+    return os.path.join('/opt/mentors', login, 'materials')
 
 @files_bp.route('/', methods=['GET', 'POST'])
 def index():
     user_folder = get_user_materials_dir()
+    if not user_folder:
+        flash('Не выбран клиент', 'warning')
+        return redirect(url_for('dashboard.index'))
     os.makedirs(user_folder, exist_ok=True)
 
     # Загрузка одного или нескольких файлов
@@ -38,6 +45,9 @@ def index():
 @files_bp.route('/edit/<filename>', methods=['GET', 'POST'])
 def edit_file(filename):
     user_folder = get_user_materials_dir()
+    if not user_folder:
+        flash('Не выбран клиент', 'warning')
+        return redirect(url_for('files.index'))
     filepath = os.path.join(user_folder, filename)
     if not os.path.abspath(filepath).startswith(os.path.abspath(user_folder)):
         flash('Нельзя редактировать этот файл.', 'danger')
@@ -68,6 +78,9 @@ def edit_file(filename):
 @files_bp.route('/delete/<filename>', methods=['POST'])
 def delete_file(filename):
     user_folder = get_user_materials_dir()
+    if not user_folder:
+        flash('Не выбран клиент', 'warning')
+        return redirect(url_for('files.index'))
     filepath = os.path.join(user_folder, filename)
     if not os.path.abspath(filepath).startswith(os.path.abspath(user_folder)):
         flash('Нельзя удалить этот файл.', 'danger')
@@ -83,4 +96,7 @@ def delete_file(filename):
 @files_bp.route('/download/<filename>')
 def download_file(filename):
     user_folder = get_user_materials_dir()
+    if not user_folder:
+        flash('Не выбран клиент', 'warning')
+        return redirect(url_for('files.index'))
     return send_from_directory(user_folder, filename, as_attachment=True)

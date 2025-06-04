@@ -6,6 +6,9 @@ from flask import (
 
 # во всех блюпринтах уже есть auth_bp, dashboard_bp, chats_bp и т.д.
 from routes import register_blueprints
+import json
+
+USERS_FILE_PATH = os.path.join(os.path.dirname(__file__), 'users.json')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")  # TODO: заменить в проде
@@ -14,6 +17,23 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")  # TODO: зам�
 # Подключаем ВСЕ блюпринты
 # ------------------------------------------------------------------
 register_blueprints(app)
+
+
+@app.context_processor
+def inject_globals():
+    user = session.get('user', {})
+    is_admin = user.get('role') == 'admin'
+    selected_client = session.get('selected_client', '') if is_admin else ''
+    clients = []
+    if is_admin:
+        try:
+            with open(USERS_FILE_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            clients = [u for u, info in data.items() if info.get('role') == 'user']
+        except Exception:
+            pass
+    any_unread = any(session.get('unread', {}).values())
+    return dict(any_unread=any_unread, is_admin=is_admin, admin_clients=clients, selected_client=selected_client)
 
 # ------------------------------------------------------------------
 # Разрешённые маршруты без авторизации

@@ -3,6 +3,7 @@ import pickle
 from datetime import datetime, timedelta
 from collections import Counter
 from flask import Blueprint, render_template, session, request, current_app
+from .helpers import current_client_login
 from .chats import get_sessions_file
 
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
@@ -21,7 +22,7 @@ def _safe_date(val: str, default):
 
 @dashboard_bp.route('/', methods=['GET'])
 def index():
-    client_login = session.get('user', {}).get('name')
+    client_login = current_client_login()
     if not client_login:
         return render_template(
             'dashboard.html',

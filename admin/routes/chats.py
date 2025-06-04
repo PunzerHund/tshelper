@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, session
+from .helpers import current_client_login
 import os
 import pickle
 from collections import defaultdict
@@ -151,7 +152,7 @@ def group_has_unread(accs: list, unread_status: dict) -> bool:
 
 @chats_bp.route('/', methods=['GET'])
 def index():
-    client_login = session.get('user', {}).get('name', '')
+    client_login = current_client_login()
 
     groups, sessions = merge_accounts_and_sessions(client_login)
     unread = unread_map()
