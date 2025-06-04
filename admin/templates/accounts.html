@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .account-controls { width:220px; float:left; margin-right:40px; }
+  .account-controls button, .account-controls form { width:100%; margin-bottom:8px; }
+  .account-controls input[type="text"] { width:100%; margin-bottom:4px; box-sizing:border-box; }
+  .account-lists { overflow:hidden; }
+  .select-all-header { width:32px; }
+  .select-user-cell { width:32px; text-align:center; }
+  .bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 200px;
+    justify-content: flex-end;
+  }
+  .action-menu {
+    min-width: 130px;
+    max-width: 180px;
+    padding: 4px 6px;
+    font-size: 15px;
+  }
+  .btn-primary, .btn-success {
+    background:linear-gradient(90deg,#2186eb,#00c6fb); border:none; color:#fff;
+    border-radius:8px; padding:8px 18px; font-weight:500;
+    box-shadow:0 1px 4px rgba(33,134,235,.1);
+    transition:box-shadow .15s, background .2s;
+  }
+  .btn-primary:hover, .btn-success:hover {
+    background:linear-gradient(90deg,#00c6fb,#2186eb);
+    box-shadow:0 2px 8px rgba(33,134,235,.18);
+  }
+  .summary-flex {
+    display:flex; align-items:center; justify-content:space-between; gap:20px; width:100%;
+  }
+  .summary-title {
+    font-weight:500; font-size:1.07em; letter-spacing:.01em;
+    display:flex; align-items:center; gap:10px; flex-shrink:0;
+  }
+  .group-actions { display:flex; align-items:center; gap:10px; margin:0; }
+</style>
+
+<div class="account-controls">
+  <button class="btn btn-primary" onclick="showCreateGroupModal()">Создать группу</button>
+  <div id="createGroupModal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;
+       background:rgba(0,0,0,0.35);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:28px 32px;border-radius:8px;min-width:300px;
+                box-shadow:0 8px 24px rgba(0,0,0,0.12);position:relative;">
+      <form method="post" action="{{ url_for('accounts.create_group') }}">
+        <label>Название группы:</label>
+        <input type="text" name="group_name" style="width:100%;margin:14px 0;" required autofocus>
+        <div style="text-align:right;">
+          <button type="button" onclick="hideCreateGroupModal()" style="margin-right:10px;">Отмена</button>
+          <button type="submit" class="btn btn-success">Создать</button>
+        </div>
+      </form>
+      <button onclick="hideCreateGroupModal()" style="position:absolute;top:6px;right:10px;
+              background:transparent;border:none;font-size:18px;">×</button>
+    </div>
+  </div>
+  <script>
+    function showCreateGroupModal(){ document.getElementById('createGroupModal').style.display='flex' }
+    function hideCreateGroupModal(){ document.getElementById('createGroupModal').style.display='none' }
+  </script>
+  <button class="btn btn-primary" onclick="showAddAccountsModal('')">Добавить аккаунт</button>
+  <div id="addAccountsModal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;
+       background:rgba(0,0,0,0.35);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:28px 32px;border-radius:8px;min-width:300px;
+                box-shadow:0 8px 24px rgba(0,0,0,0.12);position:relative;">
+      <form method="post" action="{{ url_for('accounts.create_user') }}">
+        <input type="hidden" name="group" id="modal-group" value="">
+        <label>Username(ы) через пробел:</label>
+        <input type="text" name="usernames" style="width:100%;margin:14px 0;" required autofocus>
+        <div style="text-align:right;">
+          <button type="button" onclick="hideAddAccountsModal()" style="margin-right:10px;">Отмена</button>
+          <button type="submit" class="btn btn-success">Добавить</button>
+        </div>
+      </form>
+      <button onclick="hideAddAccountsModal()" style="position:absolute;top:6px;right:10px;
+              background:transparent;border:none;font-size:18px;">×</button>
+    </div>
+  </div>
+  <script>
+    function showAddAccountsModal(grp){
+      document.getElementById('modal-group').value = grp;
+      document.getElementById('addAccountsModal').style.display='flex';
+    }
+    function hideAddAccountsModal(){ document.getElementById('addAccountsModal').style.display='none' }
+  </script>
+  <form id="importForm" method="post" action="{{ url_for('accounts.import_data') }}" enctype="multipart/form-data" style="margin-top:8px;">
+    <input type="file" name="file" id="importFile" style="display:none;" onchange="importForm.submit()">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('importFile').click()">Импорт данных</button>
+  </form>
+  <form method="get" action="{{ url_for('accounts.export_data') }}" style="margin-top:8px;">
+    <button class="btn btn-primary">Экспорт данных</button>
+  </form>
+  <label style="margin-top:10px;display:block;">
+    <input type="checkbox" id="allow_all" {% if allow_all %}checked{% endif %}>
+    Разрешить доступ без ограничений
+  </label>
+</div>
+
+<!-- Модальное окно для массового перемещения -->
+<div id="bulkMoveModal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;
+       background:rgba(0,0,0,0.35);z-index:1002;align-items:center;justify-content:center;">
+  <div style="background:#fff;padding:28px 32px;border-radius:8px;min-width:300px;box-shadow:0 8px 24px rgba(0,0,0,0.12);position:relative;">
+    <form id="bulkMoveForm">
+      <input type="hidden" name="usernames" id="bulkMoveUsernames">
+      <input type="hidden" name="from_group" id="bulkMoveFromGroup">
+      <label>Переместить в:</label>
+      <select name="to_group" id="bulkMoveToGroup" style="width:100%;margin:14px 0;" required>
+      </select>
+      <div style="text-align:right;">
+        <button type="button" onclick="hideBulkMoveModal()" style="margin-right:10px;">Отмена</button>
+        <button type="submit" class="btn btn-success">Переместить</button>
+      </div>
+    </form>
+    <button onclick="hideBulkMoveModal()" style="position:absolute;top:6px;right:10px;background:transparent;border:none;font-size:18px;">×</button>
+  </div>
+</div>
+
+<div class="account-lists">
+  <h3>Группы</h3>
+  <ul>
+    {% for group, users in groups.items() %}
+    <li>
+      <details>
+        <summary>
+          <span class="summary-flex">
+            <input type="checkbox" class="select-all" data-group="{{ group }}">
+            <span class="summary-title">{{ group }} ({{ users|length }})</span>
+            <span class="group-actions">
+              <select class="action-menu" onchange="groupAction('{{ group }}', this.value, this)">
+                <option selected disabled>Действие</option>
+                <option value="rename">Переименовать</option>
+                <option value="block">Заблокировать группу</option>
+                <option value="delete">Удалить группу</option>
+              </select>
+              <button class="btn btn-primary" onclick="showAddAccountsModal('{{ group }}');return false;">
+                Добавить
+              </button>
+            </span>
+            <span class="bulk-actions">
+              <select class="action-menu" id="bulk-action-{{ group }}">
+                <option selected disabled>Выделенные</option>
+                <option value="block">Заблокировать</option>
+                <option value="unblock">Разблокировать</option>
+                <option value="delete">Удалить</option>
+                <option value="move">Переместить</option>
+              </select>
+              <button class="btn btn-success" onclick="applyBulkAction('{{ group }}')">Применить</button>
+            </span>
+          </span>
+        </summary>
+        <table class="table table-striped table-hover table-bordered table-sm" style="margin-left:16px;">
+          <thead>
+            <tr>
+              <th class="select-all-header"></th>
+              <th>Имя</th>
+              <th>Фамилия</th>
+              <th>Username</th>
+              <th>Статус</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+            <tr>
+              <td class="select-user-cell">
+                <input type="checkbox" class="select-user" data-group="{{ group }}" data-username="{{ user.username }}">
+              </td>
+              <td>{{ user.first_name }}</td>
+              <td>{{ user.last_name }}</td>
+              <td>@{{ user.username }}</td>
+              <td>
+                {% if user.status=='active' %}
+                  <span style="color:#24a148;">Активен</span>
+                {% else %}
+                  <span style="color:#d12727;">Заблокирован</span>
+                {% endif %}
+              </td>
+              <td>
+                <select class="action-menu" onchange="userActionMenu('{{ user.username }}','{{ group }}',this)">
+                  <option selected disabled>Действие</option>
+                  {% if user.status=='active' %}
+                    <option value="block">Заблокировать</option>
+                  {% else %}
+                    <option value="unblock">Разблокировать</option>
+                  {% endif %}
+                  <option value="delete">Удалить</option>
+                  <option value="move">Переместить</option>
+                </select>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <h3 style="display:flex;justify-content:space-between;align-items:center;">
+    <span>Пользователи вне групп</span>
+    <span class="bulk-actions" style="margin-left:auto;">
+      <select class="action-menu" id="bulk-action-ungrouped">
+        <option selected disabled>Выделенные</option>
+        <option value="block">Заблокировать</option>
+        <option value="unblock">Разблокировать</option>
+        <option value="delete">Удалить</option>
+        <option value="move">Переместить</option>
+      </select>
+      <button class="btn btn-success" onclick="applyBulkUngrouped()">Применить</button>
+    </span>
+  </h3>
+  <table class="table table-striped table-hover table-bordered table-sm">
+    <thead>
+      <tr>
+        <th class="select-all-header">
+          <input type="checkbox" id="select-all-ungrouped">
+        </th>
+        <th>Имя</th>
+        <th>Фамилия</th>
+        <th>Username</th>
+        <th>Статус</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in accounts %}
+      <tr>
+        <td class="select-user-cell">
+          <input type="checkbox" class="select-user-ungrouped" data-username="{{ user.username }}">
+        </td>
+        <td>{{ user.first_name }}</td>
+        <td>{{ user.last_name }}</td>
+        <td>@{{ user.username }}</td>
+        <td>
+          {% if user.status=='active' %}
+            <span style="color:#24a148;">Активен</span>
+          {% else %}
+            <span style="color:#d12727;">Заблокирован</span>
+          {% endif %}
+        </td>
+        <td>
+          <select class="action-menu" onchange="userActionMenu('{{ user.username }}','',this)">
+            <option selected disabled>Действие</option>
+            {% if user.status=='active' %}
+              <option value="block">Заблокировать</option>
+            {% else %}
+              <option value="unblock">Разблокировать</option>
+            {% endif %}
+            <option value="delete">Удалить</option>
+            <option value="move">Переместить</option>
+          </select>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function saveDetailsState() {
+  const open = Array.from(document.querySelectorAll('details'))
+    .filter(d=>d.open)
+    .map(d=>d.querySelector('.summary-title').textContent.split(' (')[0]);
+  localStorage.setItem('openGroups', JSON.stringify(open));
+}
+function restoreDetailsState() {
+  let open = [];
+  try { open = JSON.parse(localStorage.getItem('openGroups')||'[]'); } catch(e){}
+  document.querySelectorAll('details').forEach(d=>{
+    const title = d.querySelector('.summary-title').textContent.split(' (')[0];
+    d.open = open.includes(title);
+    d.addEventListener('toggle', saveDetailsState);
+  });
+}
+document.addEventListener('DOMContentLoaded', restoreDetailsState);
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('.select-all').forEach(chk=>
+    chk.addEventListener('change', ()=>{
+      const grp=chk.dataset.group;
+      document.querySelectorAll(`.select-user[data-group="${grp}"]`)
+        .forEach(c=>c.checked=chk.checked);
+    })
+  );
+  document.getElementById('select-all-ungrouped').addEventListener('change', function(){
+    document.querySelectorAll('.select-user-ungrouped')
+      .forEach(c=>c.checked=this.checked);
+  });
+});
+
+function userActionMenu(username, fromGroup, sel){
+  const action = sel.value;
+  if(action==='move'){
+    openBulkMoveModal([username], fromGroup);
+    sel.selectedIndex = 0;
+    return;
+  }
+  userAction(username, fromGroup, action);
+  sel.selectedIndex = 0;
+}
+
+function applyBulkAction(grp){
+  const sel=document.getElementById(`bulk-action-${grp}`);
+  const act=sel.value;
+  if(!act){alert('Выберите действие');return;}
+  const users=Array.from(
+    document.querySelectorAll(`.select-user[data-group="${grp}"]:checked`)
+  ).map(c=>c.dataset.username);
+  if(!users.length){alert('Нет выделенных');sel.selectedIndex=0;return;}
+  if(act==="move"){
+    openBulkMoveModal(users, grp);
+    sel.selectedIndex = 0;
+    return;
+  }
+  Promise.all(users.map(u=>
+    fetch('{{ url_for("accounts.user_action") }}',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`action=${act}&username=${encodeURIComponent(u)}&from_group=${encodeURIComponent(grp)}`
+    })
+  )).then(()=>{location.reload()});
+  sel.selectedIndex = 0;
+}
+
+function applyBulkUngrouped(){
+  const sel=document.getElementById('bulk-action-ungrouped');
+  const act=sel.value;
+  if(!act){alert('Выберите действие');return;}
+  const users=Array.from(document.querySelectorAll('.select-user-ungrouped:checked'))
+    .map(c=>c.dataset.username);
+  if(!users.length){alert('Нет выделенных');sel.selectedIndex=0;return;}
+  if(act==="move"){
+    openBulkMoveModal(users, '');
+    sel.selectedIndex = 0;
+    return;
+  }
+  Promise.all(users.map(u=>
+    fetch('{{ url_for("accounts.user_action") }}',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`action=${act}&username=${encodeURIComponent(u)}&from_group=`
+    })
+  )).then(()=>{location.reload()});
+  sel.selectedIndex = 0;
+}
+
+function openBulkMoveModal(usernames, from_group){
+  document.getElementById('bulkMoveUsernames').value = usernames.join(',');
+  document.getElementById('bulkMoveFromGroup').value = from_group;
+  // Сформировать список групп без текущей (если от одного пользователя)
+  let options = `<option value="None">Вне групп</option>`;
+  const groupData = {{ groups|tojson }};
+  const currentGroups = {{ current_groups|tojson }};
+  let exclude = "";
+  if (usernames.length === 1 && usernames[0] in currentGroups) {
+    exclude = currentGroups[usernames[0]];
+  } else if (from_group) {
+    exclude = from_group;
+  }
+  Object.keys(groupData).forEach(gr => {
+    if(gr !== exclude)
+      options += `<option value="${gr}">${gr}</option>`;
+  });
+  document.getElementById('bulkMoveToGroup').innerHTML = options;
+  document.getElementById('bulkMoveModal').style.display = 'flex';
+}
+function hideBulkMoveModal(){
+  document.getElementById('bulkMoveModal').style.display='none';
+}
+document.getElementById('bulkMoveForm').onsubmit = function(e){
+  e.preventDefault();
+  const usernames = document.getElementById('bulkMoveUsernames').value.split(',');
+  const from_group = document.getElementById('bulkMoveFromGroup').value;
+  const to_group = document.getElementById('bulkMoveToGroup').value;
+  const formData = new FormData();
+  usernames.forEach(u=>formData.append('usernames[]', u));
+  formData.append('from_group', from_group);
+  formData.append('to_group', to_group);
+  fetch('{{ url_for("accounts.bulk_move") }}', {
+    method: 'POST',
+    body: formData
+  }).then(()=>{
+    hideBulkMoveModal();
+    location.reload();
+  });
+};
+
+function userAction(username, fromGroup, action){
+  fetch('{{ url_for("accounts.user_action") }}',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:`action=${action}&username=${encodeURIComponent(username)}&from_group=${encodeURIComponent(fromGroup)}`
+  }).then(()=>location.reload());
+}
+function groupAction(group, action, el){
+  if(action==='block'&&!confirm(`Заблокировать всю группу "${group}"?`)){el.selectedIndex=0;return;}
+  if(action==='delete'&&!confirm(`Удалить группу "${group}"?`)){el.selectedIndex=0;return;}
+  let body=`action=${action}&group_name=${encodeURIComponent(group)}`;
+  if(action==='rename'){
+    const n=prompt('Новое имя группы:');
+    if(!n){el.selectedIndex=0;return;}
+    body+=`&new_name=${encodeURIComponent(n)}`;
+  }
+  fetch('{{ url_for("accounts.group_action") }}',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body
+  }).then(()=>location.reload());
+}
+</script>
+{% endblock %}

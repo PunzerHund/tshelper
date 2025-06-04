@@ -1,0 +1,17 @@
+{
+  "admin": {
+    "password": "admin123",
+    "role": "admin",
+    "token": ""
+  },
+  "client1": {
+    "password": "48Dfh@djk23",
+    "role": "user",
+    "token": "8027893753:AAHgAIVad59kuaZd_mNkjQinhnuIsIQLjVQ"
+  },
+  "client2": {
+    "password": "486253123",
+    "role": "user",
+    "token": "8161480188:AAEkpngJkbBZlNA1RNxh4CRrDUmVJ_Yes1Q"
+  }
+}

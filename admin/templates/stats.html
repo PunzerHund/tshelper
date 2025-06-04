@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <h1 class="mb-4">{{ title }}</h1>
+    <form method="post" id="broadcast-form">
+      <div class="mb-3">
+        <label for="name" class="form-label">Имя (необязательно)</label>
+        <input id="name" name="name" class="form-control" type="text" value="{{ name|default('') }}">
+      </div>
+      <div class="mb-3">
+        <label for="message_text" class="form-label">Текст сообщения</label>
+        <textarea id="message_text" name="message_text" class="form-control" rows="9"></textarea>
+      </div>
+      <div class="mb-3">
+        <input class="form-check-input me-2" type="checkbox" id="select-all-global">
+        <label class="form-check-label fw-bold" for="select-all-global">Отправить всем</label>
+      </div>
+      <div class="accordion mb-3" id="accountsAccordion">
+        {% for group, accs in accounts_by_group.items() %}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ loop.index }}">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false"
+                      aria-controls="collapse-{{ loop.index }}">
+                {{ group }} ({{ accs|length }})
+              </button>
+            </h2>
+            <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse"
+                 aria-labelledby="heading-{{ loop.index }}">
+              <div class="accordion-body p-2">
+                <div class="mb-2">
+                  <input class="form-check-input me-2 group-select-all"
+                         type="checkbox"
+                         id="select-all-{{ loop.index }}"
+                         data-group="{{ group }}">
+                  <label class="form-check-label fw-semibold" for="select-all-{{ loop.index }}">
+                    Отправить всем в группе
+                  </label>
+                </div>
+                <ul class="list-group list-group-flush">
+                  {% for acc in accs %}
+                    <li class="list-group-item d-flex align-items-center">
+                      <input class="form-check-input me-2 user-checkbox"
+                             type="checkbox"
+                             name="selected"
+                             value="{{ acc.username }}"
+                             id="user-{{ group }}-{{ loop.index }}"
+                             data-group="{{ group }}"
+                             {% if selected_usernames and acc.username in selected_usernames %}checked{% endif %}>
+                      <span>
+                        <b>{{ acc.first_name }} {{ acc.last_name }}</b>
+                        <small class="text-muted ms-2">@{{ acc.username }}</small>
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary">Разослать</button>
+    </form>
+
+    {% if send_results %}
+      <hr>
+      <h4>Результаты рассылки</h4>
+      <ul class="list-group">
+        {% for username, status in send_results %}
+          <li class="list-group-item">
+            <b>@{{ username }}</b> — {{ status }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <script>
+      document.getElementById('select-all-global').addEventListener('change', function() {
+        let checked = this.checked;
+        document.querySelectorAll('.user-checkbox').forEach(function(cb) { cb.checked = checked; });
+        document.querySelectorAll('.group-select-all').forEach(function(cb) { cb.checked = checked; });
+      });
+
+      document.querySelectorAll('.group-select-all').forEach(function(groupCb) {
+        groupCb.addEventListener('change', function() {
+          let checked = this.checked;
+          let group = this.getAttribute('data-group');
+          document.querySelectorAll('.user-checkbox[data-group="'+group+'"]').forEach(function(cb) {
+            cb.checked = checked;
+          });
+          let allChecked = Array.from(document.querySelectorAll('.group-select-all')).every(cb => cb.checked);
+          document.getElementById('select-all-global').checked = allChecked;
+        });
+      });
+
+      document.querySelectorAll('.user-checkbox').forEach(function(userCb) {
+        userCb.addEventListener('change', function() {
+          let group = this.getAttribute('data-group');
+          let groupUsers = document.querySelectorAll('.user-checkbox[data-group="'+group+'"]');
+          let groupAllCb = document.querySelector('.group-select-all[data-group="'+group+'"]');
+          let allInGroup = Array.from(groupUsers).every(cb => cb.checked);
+          groupAllCb.checked = allInGroup;
+
+          let allUsersChecked = Array.from(document.querySelectorAll('.user-checkbox')).every(cb => cb.checked);
+          document.getElementById('select-all-global').checked = allUsersChecked;
+        });
+      });
+    </script>
+  </div>
+  <div class="col-lg-4">
+    <div class="sticky-top" style="top:1.5rem;">
+      <div class="card shadow-sm">
+        <div class="card-header fw-bold">
+          История рассылок
+        </div>
+        <div class="card-body" style="max-height: 80vh; overflow-y: auto;">
+          {% if broadcast_history and broadcast_history|length > 0 %}
+            <div class="list-group">
+            {% for b in broadcast_history %}
+              {% set failed = b.results | selectattr('1', 'ne', 'OK') | list %}
+              <div class="list-group-item py-2">
+                <div class="mb-1 small text-muted">
+                  {{ b.dt }}
+                </div>
+                <div class="mb-1"><b>Имя:</b> {{ b.name|default('-') }}</div>
+                <div class="mb-1"><b>Текст:</b>
+                  {% set words = b.text.split() %}
+                  {{ words[:4]|join(' ') }}{% if words|length > 4 %}...{% endif %}
+                </div>
+                <div class="mb-1">
+                  <b>Результат:</b>
+                  {% set ok = b.results | selectattr('1', 'equalto', 'OK') | list | length %}
+                  <span class="text-success">{{ ok }}/{{ b.results|length }} успешно</span>
+                  {% if failed|length > 0 %}
+                    <span class="text-danger ms-2">ошибки есть</span>
+                  {% endif %}
+                </div>
+                <button class="btn btn-link p-0 small" type="button"
+                  data-bs-toggle="modal" data-bs-target="#modalDetails{{ loop.index }}">
+                  Показать детали
+                </button>
+              </div>
+            {% endfor %}
+            </div>
+          {% else %}
+            <span class="text-muted">Нет отправленных рассылок.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# --- МОДАЛЬНЫЕ ОКНА для истории: вынесены ВНЕ container! --- #}
+{% for b in broadcast_history %}
+  {% set failed = b.results | selectattr('1', 'ne', 'OK') | list %}
+  <div class="modal fade" id="modalDetails{{ loop.index }}" tabindex="-1" aria-labelledby="modalLabel{{ loop.index }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalLabel{{ loop.index }}">Детали рассылки</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          <p><b>Имя:</b> {{ b.name|default('-') }}</p>
+          <p><b>Текст:</b> {{ b.text|replace('\n', '<br>')|safe }}</p>
+          <hr>
+          {% if failed|length > 0 %}
+            <div class="mb-2 fw-semibold">
+              Не удалось отправить следующим получателям:
+            </div>
+            <ul class="mb-0 small">
+              {% for uname, status in failed %}
+                <li>@{{ uname }} — {{ status }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="mb-2 text-success">Все сообщения отправлены успешно!</div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+{% endblock %}

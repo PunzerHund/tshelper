@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4"><i class="fa fa-folder-open"></i> Мои файлы</h2>
+
+<!-- Загрузка файлов -->
+<form method="post" enctype="multipart/form-data" class="mb-4">
+    <div class="input-group">
+        <input type="file" name="file" class="form-control" required multiple>
+        <button class="btn btn-success" type="submit"><i class="fa fa-upload"></i> Загрузить</button>
+    </div>
+</form>
+
+<!-- Поиск -->
+<div class="mb-3">
+    <input type="text" id="fileSearch" class="form-control" placeholder="Поиск по имени файла..." onkeyup="filterFiles()">
+</div>
+
+<div class="card shadow-sm">
+<table class="table table-striped align-middle mb-0" id="filesTable">
+    <thead class="table-light">
+        <tr>
+            <th style="width:40px"></th>
+            <th>Имя файла</th>
+            <th style="width:70px; text-align:center;">Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for fname in files %}
+        <tr>
+            <td><i class="fa fa-file-text-o text-secondary"></i></td>
+            <td><a href="{{ url_for('files.download_file', filename=fname) }}" target="_blank" style="font-family:monospace;">{{ fname }}</a></td>
+            <td style="text-align:center;">
+                <a href="{{ url_for('files.edit_file', filename=fname) }}" class="btn btn-link p-0" title="Редактировать">
+                    <i class="fa fa-pencil fa-lg text-primary"></i>
+                </a>
+                <form method="post" action="{{ url_for('files.delete_file', filename=fname) }}" style="display:inline;">
+                    <button type="submit" class="btn btn-link p-0 ms-2" title="Удалить" onclick="return confirm('Удалить файл?')">
+                        <i class="fa fa-trash fa-lg text-danger"></i>
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="3" class="text-center text-muted">Нет файлов</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<script>
+function filterFiles() {
+    let input = document.getElementById("fileSearch");
+    let filter = input.value.toLowerCase();
+    let table = document.getElementById("filesTable");
+    let trs = table.getElementsByTagName("tr");
+    for (let i = 1; i < trs.length; i++) {
+        let td = trs[i].getElementsByTagName("td")[1];
+        if (td) {
+            let txtValue = td.textContent || td.innerText;
+            trs[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+        }
+    }
+}
+</script>
+{% endblock %}

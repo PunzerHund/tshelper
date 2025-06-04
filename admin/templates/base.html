@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title or "MentorWeb" }}</title>
+    <!-- Bootstrap CSS (CDN) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome (иконки) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+    <style>
+    /* Красная точка «есть непрочитанное» рядом со ссылкой */
+    .badge-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-left: 4px;
+        background: #d9534f;
+        border-radius: 50%;
+    }
+    </style>
+</head>
+<body>
+{% if request.endpoint != 'auth.login' %}
+<nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">MentorWeb</a>
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint.startswith('dashboard') %}fw-bold{% endif %}"
+                   href="{{ url_for('dashboard.index') }}">
+                    Дашборд
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint.startswith('chats') %}fw-bold{% endif %}"
+                   href="{{ url_for('chats.index') }}">
+                    Чаты
+                    {% if any_unread %}<span class="badge-dot"></span>{% endif %}
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint.startswith('accounts') %}fw-bold{% endif %}"
+                   href="{{ url_for('accounts.index') }}">
+                    Аккаунты
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint.startswith('files') %}fw-bold{% endif %}"
+                   href="{{ url_for('files.index') }}">
+                    Файлы
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint.startswith('stats') %}fw-bold{% endif %}"
+                   href="{{ url_for('stats.index') }}">
+                    Рассылка
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('auth.logout') }}">Выход</a>
+            </li>
+        </ul>
+    </div>
+</nav>
+{% endif %}
+
+<div class="container">
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="alert alert-info">
+        {% for msg in messages %}
+            <div>{{ msg }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</div>
+
+<!-- Bootstrap JS (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

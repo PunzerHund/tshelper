@@ -1,0 +1,61 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f6f7f8;
+    margin: 0;
+    padding: 0;
+}
+nav {
+    background-color: #1471be;
+    padding: 10px;
+}
+canvas {
+  max-width: 100%;
+  height: 280px;        /* < фиксированная или min-height: 280px; */
+}
+nav ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+}
+nav ul li {
+    margin-right: 15px;
+}
+nav ul li a {
+    color: white;
+    text-decoration: none;
+}
+.container {
+    padding: 20px;
+}
+.flashes {
+    list-style-type: none;
+    padding: 0;
+    color: red;
+}
+.centerbox {
+  max-width: 370px; margin: 68px auto 0 auto; background: #fff; border-radius: 18px; box-shadow: 0 4px 22px #001a2b16; padding: 44px 34px 34px 34px;
+}
+.headline { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 28px; color: #1561a6;}
+form { display: flex; flex-direction: column; gap: 18px;}
+input[type="text"], input[type="password"] {
+  padding: 12px; border-radius: 8px; border: 1px solid #bad2ec;
+  font-size: 15px; background: #f6fbff; transition: border 0.2s;
+}
+input:focus { outline: none; border-color: #59a4e6;}
+button[type="submit"] {
+  background: linear-gradient(90deg,#3187d5,#2ed1da);
+  color: #fff; border: none; border-radius: 8px; padding: 12px 0;
+  font-size: 17px; font-weight: 500; cursor: pointer; transition: background 0.2s;
+  box-shadow: 0 2px 10px #2ed1da23;
+}
+button[type="submit"]:hover { background: linear-gradient(90deg,#2568aa,#13b9b8);}
+.error { color: #e02929; text-align: center; margin-bottom: 8px;}
+.footer {
+  margin-top: 42px; text-align: center; color: #99a7b6; font-size: 13px;
+  letter-spacing: 0.2px;
+}
+.footer b { color: #0c7c91;}
+@media (max-width: 500px) {
+  .centerbox { padding: 19px 5vw; }
+}

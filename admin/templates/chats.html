@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .chats-container {
+    display: flex;
+    height: calc(100vh - 60px);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .sidebar {
+    width: 320px;
+    background: #fff;
+    border-right: 1px solid #ddd;
+    overflow-y: auto;
+    height: 100%;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 2;
+  }
+  .sidebar header {
+    padding: 20px;
+    font-size: 1.2em;
+    font-weight: 600;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0;
+  }
+  .sidebar header a {
+    font-size: 0.8em;
+    color: #4a90e2;
+    text-decoration: none;
+  }
+  .user-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .user-item {
+    padding: 15px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f1f1;
+  }
+  .user-item.selected, .user-item:hover {
+    background: #e8f0fe;
+  }
+  .user-name {
+    font-weight: 600;
+  }
+  .user-time {
+    font-size: 0.85em;
+    color: #888;
+    text-align: right;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    min-width: 0;
+    background: #f0f2f5;
+    position: relative;
+  }
+  .chat-header {
+    padding: 20px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .chat-header-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .scroll-down-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    padding: 8px 14px 6px 14px;
+    cursor: pointer;
+    font-size: 1rem;
+    border: none;
+    outline: none;
+    user-select: none;
+    transition: background 0.2s;
+    margin-left: 12px;
+  }
+  .scroll-down-btn:hover {
+    background: #f1f3fb;
+  }
+  .down-arrow {
+    display: block;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    color: #276ef1;
+  }
+  .chat-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    min-height: 0;
+    background: #f0f2f5;
+    scroll-behavior: smooth;
+  }
+  .message {
+    margin-bottom: 20px;
+    max-width: 70%;
+  }
+  .message.incoming .msg-bubble {
+    background: #fff;
+    border-radius: 12px 12px 12px 0;
+  }
+  .message.outgoing {
+    align-self: flex-end;
+  }
+  .message.outgoing .msg-bubble {
+    background: #dcf8c6;
+    border-radius: 12px 12px 0 12px;
+  }
+  .msg-bubble {
+    padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    word-break: break-word;
+  }
+  .msg-time {
+    font-size: 0.75em;
+    color: #666;
+    margin-top: 4px;
+  }
+</style>
+<div class="chats-container">
+  <div class="sidebar">
+    <header>Пользователи <a href="#">Выйти</a></header>
+    <ul class="user-list">
+      {% for group, accounts in groups.items() %}
+        <li class="user-item group-header" onclick="toggleGroup('{{ loop.index0 }}')">
+          <span>{{ group }} ({{ accounts|length }})</span>
+          <span>
+            <i id="arrow-{{ loop.index0 }}" class="fa {% if group == opened_group %}fa-chevron-down{% else %}fa-chevron-right{% endif %}"></i>
+          </span>
+        </li>
+        <ul id="group-{{ loop.index0 }}" style="display: {% if group == opened_group %}block{% else %}none{% endif %}; padding-left: 0; margin: 0;">
+          {% for acc in accounts %}
+          <li class="user-item{% if acc.user_id == selected_user_id %} selected{% endif %}" onclick="location='?user_id={{ acc.user_id }}&opened_group={{ group|urlencode }}'">
+            <span class="user-name">
+              {{ acc.first_name or '' }} {{ acc.last_name or '' }}{% if not acc.first_name and not acc.last_name %}{{ acc.username }}{% endif %}
+            </span>
+            <span class="user-time">{{ acc.last_human or '-' }}</span>
+          </li>
+          {% endfor %}
+          {% if not accounts %}
+          <li style="padding: 15px 20px; color: #aaa;">Нет пользователей</li>
+          {% endif %}
+        </ul>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="main">
+    <div class="chat-header">
+      <span class="chat-header-title">{{ selected_account.first_name or selected_account.username or 'Выберите пользователя' }}</span>
+      <button class="scroll-down-btn" onclick="scrollChatDown()">
+        Вниз
+        <svg class="down-arrow" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="chat-body" id="chat-body">
+      {% if chat_history %}
+        {% for m in chat_history %}
+        <div class="message {% if m.role=='user' %}outgoing{% else %}incoming{% endif %}">
+          <div class="msg-bubble">{{ m.content|e|replace('\n','<br>')|safe }}</div>
+          <div class="msg-time">{{ m.timestamp }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="color:#888;">Нет сообщений</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+  function toggleGroup(idx) {
+    var list = document.getElementById('group-' + idx);
+    var arrow = document.getElementById('arrow-' + idx);
+    if (list.style.display === 'none' || list.style.display === '') {
+      list.style.display = 'block';
+      arrow.className = 'fa fa-chevron-down';
+    } else {
+      list.style.display = 'none';
+      arrow.className = 'fa fa-chevron-right';
+    }
+  }
+  function scrollChatDown() {
+    var chatBody = document.getElementById('chat-body');
+    if (chatBody) {
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+  }
+</script>
+{% endblock %}

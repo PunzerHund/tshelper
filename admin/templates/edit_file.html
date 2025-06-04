@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3"><i class="fa fa-pencil"></i> Редактировать файл</h2>
+<form method="post">
+    <div class="mb-3">
+        <label for="filename" class="form-label">Имя файла</label>
+        <input type="text" class="form-control" id="filename" name="new_filename" value="{{ filename }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="content" class="form-label">Содержимое файла</label>
+        <textarea name="content" id="content" class="form-control" style="height:420px; font-family:monospace; font-size:15px;">{{ content }}</textarea>
+    </div>
+    <button class="btn btn-success" type="submit"><i class="fa fa-save"></i> Сохранить</button>
+    <a href="{{ url_for('files.index') }}" class="btn btn-secondary ms-2">Назад</a>
+</form>
+{% endblock %}
