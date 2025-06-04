@@ -79,7 +79,8 @@ def create_user():
 
     # Патчим ACCOUNTS_PATH в bot.py
     bot_path = os.path.join(user_dir, 'bot.py')
-    new_accounts_path = f"ACCOUNTS_PATH = '/opt/mentors/{login}/accounts.pkl'"
+    # В bot.py путь к accounts.pkl формируется относительно директории бота
+    new_accounts_path = "ACCOUNTS_PATH = os.path.join(BASE_DIR, 'accounts.pkl')"
     lines = []
     with open(bot_path, 'r') as f:
         for line in f:
