@@ -4,6 +4,8 @@ import os
 import logging
 import requests
 import datetime
+import threading
+import time
 
 stats_bp = Blueprint('stats', __name__, url_prefix='/stats')
 
@@ -29,6 +31,34 @@ def load_broadcast_history(history_path):
 def save_broadcast_history(history_path, history):
     with open(history_path, 'wb') as f:
         pickle.dump(history, f)
+
+def get_templates_path(user_base):
+    return os.path.join(user_base, 'broadcast_templates.pkl')
+
+def load_templates(path):
+    try:
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    except Exception:
+        return []
+
+def save_templates(path, templates):
+    with open(path, 'wb') as f:
+        pickle.dump(templates, f)
+
+def get_scheduled_path(user_base):
+    return os.path.join(user_base, 'scheduled_broadcasts.pkl')
+
+def load_scheduled(path):
+    try:
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    except Exception:
+        return []
+
+def save_scheduled(path, data):
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
 
 def load_accounts_by_group(path, session_userinfo=None):
     result = {}
@@ -73,6 +103,57 @@ def load_accounts_by_group(path, session_userinfo=None):
         if accs:
             result[groupname] = accs
     return result
+
+def send_broadcast(TG_TOKEN, sessions_path, history_path, text, usernames, name=''):
+    user_chatid_map = {}
+    if os.path.exists(sessions_path):
+        try:
+            with open(sessions_path, 'rb') as sf:
+                sess_data = pickle.load(sf)
+            for uid, info in sess_data.get('user_data', {}).items():
+                if info.get('username'):
+                    user_chatid_map[info['username'].lower()] = info.get('user_id')
+        except Exception as e:
+            logging.exception("Не удалось прочитать sessions.pkl: %s", e)
+
+    send_results = []
+    for uname in usernames:
+        chat_id = user_chatid_map.get(uname.lower())
+        if chat_id:
+            try:
+                send_url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+                payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'}
+                resp = requests.post(send_url, data=payload, timeout=10)
+                if resp.status_code != 200:
+                    try:
+                        desc = resp.json().get('description', '')
+                    except Exception:
+                        desc = ''
+                    send_results.append((uname, f"Error {resp.status_code}: {desc}"))
+                else:
+                    send_results.append((uname, 'OK'))
+            except Exception as e:
+                logging.exception("Ошибка отправки сообщ. %s", e)
+                send_results.append((uname, 'Exception'))
+        else:
+            send_results.append((uname, 'Нет chat_id (пользователь не писал боту?)'))
+
+    try:
+        history = load_broadcast_history(history_path)
+        history.append({
+            'dt': datetime.datetime.now().strftime('%d.%m.%Y %H:%M'),
+            'name': name,
+            'text': text,
+            'recipients': usernames,
+            'results': send_results
+        })
+        if len(history) > 50:
+            history = history[-50:]
+        save_broadcast_history(history_path, history)
+    except Exception as e:
+        logging.exception('Не удалось записать историю рассылок: %s', e)
+
+    return send_results
 
 @stats_bp.route('/', methods=['GET', 'POST'])
 def index():
@@ -128,66 +209,15 @@ def index():
             return redirect(url_for('stats.index'))
 
         selected = request.form.getlist('selected')
-        targets = []
-        for group_accounts in accounts_by_group.values():
-            for acc in group_accounts:
-                if acc['username'] in selected:
-                    targets.append(acc)
 
-        user_chatid_map = {}
-        if os.path.exists(sessions_path):
-            try:
-                with open(sessions_path, 'rb') as sf:
-                    sess_data = pickle.load(sf)
-                for uid, info in sess_data.get('user_data', {}).items():
-                    if info.get('username'):
-                        user_chatid_map[info['username'].lower()] = info.get('user_id')
-            except Exception as e:
-                logging.exception("Не удалось прочитать sessions.pkl: %s", e)
-
-        send_results = []
-        for acc in targets:
-            username = acc['username']
-            chat_id = user_chatid_map.get(username.lower())
-            if chat_id:
-                try:
-                    send_url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-                    payload = {
-                        'chat_id': chat_id,
-                        'text': message_text,
-                        'parse_mode': 'Markdown'
-                    }
-                    resp = requests.post(send_url, data=payload, timeout=10)
-                    if resp.status_code != 200:
-                        try:
-                            err_data = resp.json()
-                            desc = err_data.get('description', '')
-                        except Exception:
-                            desc = ''
-                        send_results.append((username, f"Error {resp.status_code}: {desc}"))
-                    else:
-                        send_results.append((username, 'OK'))
-                except Exception as e:
-                    logging.exception("Ошибка отправки сообщ. %s", e)
-                    send_results.append((username, 'Exception'))
-            else:
-                send_results.append((username, 'Нет chat_id (пользователь не писал боту?)'))
-
-        # --- Добавляем в историю рассылок ---
-        try:
-            history = load_broadcast_history(history_path)
-            history.append({
-                "dt": datetime.datetime.now().strftime('%d.%m.%Y %H:%M'),
-                "name": name,  # имя из формы
-                "text": message_text,
-                "recipients": [acc['username'] for acc in targets],
-                "results": send_results
-            })
-            if len(history) > 50:
-                history = history[-50:]
-            save_broadcast_history(history_path, history)
-        except Exception as e:
-            logging.exception("Не удалось записать историю рассылок: %s", e)
+        send_results = send_broadcast(
+            TG_TOKEN,
+            sessions_path,
+            history_path,
+            message_text,
+            selected,
+            name
+        )
 
         session['send_results'] = send_results
         session['selected_usernames'] = selected
@@ -207,5 +237,131 @@ def index():
         send_results=send_results,
         selected_usernames=selected_usernames,
         broadcast_history=broadcast_history,
-        name=name
+        name=name,
+        templates=load_templates(get_templates_path(user_base)),
+        scheduled=load_scheduled(get_scheduled_path(user_base))
     )
+
+
+@stats_bp.route('/template/create', methods=['POST'])
+def create_template():
+    user_base = get_user_base_dir()
+    if not user_base:
+        return redirect(url_for('stats.index'))
+    path = get_templates_path(user_base)
+    templates = load_templates(path)
+    name = request.form.get('tpl_name', '').strip()
+    text = request.form.get('tpl_text', '').strip()
+    if name and text:
+        templates.append({'name': name, 'text': text})
+        save_templates(path, templates)
+        flash('Шаблон сохранён', 'success')
+    else:
+        flash('Имя и текст шаблона обязательны', 'danger')
+    return redirect(url_for('stats.index'))
+
+
+@stats_bp.route('/template/edit/<int:idx>', methods=['POST'])
+def edit_template(idx):
+    user_base = get_user_base_dir()
+    if not user_base:
+        return redirect(url_for('stats.index'))
+    path = get_templates_path(user_base)
+    templates = load_templates(path)
+    if 0 <= idx < len(templates):
+        templates[idx]['name'] = request.form.get('tpl_name', templates[idx]['name']).strip()
+        templates[idx]['text'] = request.form.get('tpl_text', templates[idx]['text']).strip()
+        save_templates(path, templates)
+        flash('Шаблон обновлён', 'success')
+    return redirect(url_for('stats.index'))
+
+
+@stats_bp.route('/template/delete/<int:idx>', methods=['POST'])
+def delete_template(idx):
+    user_base = get_user_base_dir()
+    if not user_base:
+        return redirect(url_for('stats.index'))
+    path = get_templates_path(user_base)
+    templates = load_templates(path)
+    if 0 <= idx < len(templates):
+        templates.pop(idx)
+        save_templates(path, templates)
+        flash('Шаблон удалён', 'success')
+    return redirect(url_for('stats.index'))
+
+
+@stats_bp.route('/schedule', methods=['POST'])
+def schedule_broadcast():
+    user_base = get_user_base_dir()
+    if not user_base:
+        return redirect(url_for('stats.index'))
+    path = get_scheduled_path(user_base)
+    scheduled = load_scheduled(path)
+    text = request.form.get('message_text', '').strip()
+    name = request.form.get('name', '').strip()
+    send_date = request.form.get('send_date')
+    send_time = request.form.get('send_time')
+    usernames = request.form.getlist('selected')
+    if not text or not send_date or not send_time:
+        flash('Заполните все поля для отложенной рассылки', 'danger')
+        return redirect(url_for('stats.index'))
+    dt_str = f'{send_date} {send_time}'
+    try:
+        datetime.datetime.strptime(dt_str, '%Y-%m-%d %H:%M')
+    except ValueError:
+        flash('Неверный формат даты или времени', 'danger')
+        return redirect(url_for('stats.index'))
+    scheduled.append({'name': name, 'text': text, 'usernames': usernames, 'send_at': dt_str})
+    save_scheduled(path, scheduled)
+    flash('Рассылка запланирована', 'success')
+    return redirect(url_for('stats.index'))
+
+
+def _scheduled_worker():
+    while True:
+        try:
+            mentors_root = '/opt/mentors'
+            if os.path.isdir(mentors_root):
+                for user in os.listdir(mentors_root):
+                    user_base = os.path.join(mentors_root, user)
+                    sched_path = get_scheduled_path(user_base)
+                    if not os.path.exists(sched_path):
+                        continue
+                    try:
+                        tasks = load_scheduled(sched_path)
+                    except Exception:
+                        tasks = []
+                    if not tasks:
+                        continue
+                    env_path = os.path.join(user_base, '.env')
+                    TG_TOKEN = None
+                    try:
+                        with open(env_path, 'r') as env_file:
+                            for line in env_file:
+                                if line.strip().startswith('TG_TOKEN='):
+                                    TG_TOKEN = line.strip().split('=', 1)[1]
+                                    break
+                    except Exception:
+                        TG_TOKEN = None
+                    if not TG_TOKEN:
+                        continue
+                    sessions_path = os.path.join(user_base, 'sessions.pkl')
+                    history_path = get_broadcast_history_path(user_base)
+                    remaining = []
+                    now = datetime.datetime.now()
+                    for t in tasks:
+                        try:
+                            send_at = datetime.datetime.strptime(t['send_at'], '%Y-%m-%d %H:%M')
+                        except Exception:
+                            continue
+                        if now >= send_at:
+                            send_broadcast(TG_TOKEN, sessions_path, history_path, t['text'], t['usernames'], t.get('name',''))
+                        else:
+                            remaining.append(t)
+                    save_scheduled(sched_path, remaining)
+        except Exception:
+            logging.exception('Ошибка планировщика рассылок')
+        time.sleep(60)
+
+
+threading.Thread(target=_scheduled_worker, daemon=True).start()
