@@ -8,4 +8,11 @@
     <input type="text" name="token" placeholder="Telegram TG_TOKEN" required>
     <button type="submit">Создать</button>
 </form>
+
+<h3 class="mt-4">Существующие пользователи</h3>
+<ul>
+{% for login, info in users.items() if info.role == 'user' %}
+    <li>{{ login }}</li>
+{% endfor %}
+</ul>
 {% endblock %}

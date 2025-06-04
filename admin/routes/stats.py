@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from .helpers import current_client_login
 import pickle
 import os
 import logging
@@ -10,13 +11,10 @@ import time
 stats_bp = Blueprint('stats', __name__, url_prefix='/stats')
 
 def get_user_base_dir():
-    user_session = session.get('user')
-    if not user_session:
+    login = current_client_login()
+    if not login:
         return None
-    username = user_session.get('name')
-    if not username:
-        return None
-    return os.path.join('/opt/mentors', username)
+    return os.path.join('/opt/mentors', login)
 
 def get_broadcast_history_path(user_base):
     return os.path.join(user_base, 'broadcast_history.pkl')
@@ -163,7 +161,10 @@ def index():
         return redirect(url_for('auth.login'))
 
     user_base = get_user_base_dir()
-    if not user_base or not os.path.isdir(user_base):
+    if not user_base:
+        flash('Не выбран клиент', 'warning')
+        return redirect(url_for('dashboard.index'))
+    if not os.path.isdir(user_base):
         flash('Каталог пользователя не найден', 'danger')
         return redirect(url_for('dashboard.index'))
 

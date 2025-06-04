@@ -1,34 +1,49 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 import os
 import pickle
+from .helpers import current_client_login
 
 accounts_bp = Blueprint('accounts', __name__, url_prefix='/accounts')
 
 def get_user_dir():
-    return os.path.join('/opt/mentors', session['user']['name'])
+    login = current_client_login()
+    if not login:
+        return ''
+    return os.path.join('/opt/mentors', login)
 
 def get_accounts_file():
-    return os.path.join(get_user_dir(), 'accounts.pkl')
+    user_dir = get_user_dir()
+    if not user_dir:
+        return ''
+    return os.path.join(user_dir, 'accounts.pkl')
 
 def get_sessions_file():
-    return os.path.join(get_user_dir(), 'sessions.pkl')
+    user_dir = get_user_dir()
+    if not user_dir:
+        return ''
+    return os.path.join(user_dir, 'sessions.pkl')
 
 def load_accounts():
     path = get_accounts_file()
-    if not os.path.exists(path):
+    if not path or not os.path.exists(path):
         data = {"allow_all": False, "accounts": [], "groups": {}}
-        save_accounts(data)
+        if path:
+            save_accounts(data)
         return data
     with open(path, 'rb') as f:
         return pickle.load(f)
 
 def save_accounts(data):
     path = get_accounts_file()
+    if not path:
+        return
     with open(path, 'wb') as f:
         pickle.dump(data, f)
 
 def sync_sessions_user(user):
     sessions_path = get_sessions_file()
+    if not sessions_path:
+        return
     if os.path.exists(sessions_path):
         with open(sessions_path, "rb") as f:
             data = pickle.load(f)
@@ -50,6 +65,8 @@ def sync_sessions_user(user):
 
 def remove_sessions_user(username):
     sessions_path = get_sessions_file()
+    if not sessions_path:
+        return
     if not os.path.exists(sessions_path):
         return
     with open(sessions_path, "rb") as f:
@@ -62,7 +79,7 @@ def remove_sessions_user(username):
 
 def fetch_names_from_sessions(usernames):
     sessions_path = get_sessions_file()
-    if not os.path.exists(sessions_path):
+    if not sessions_path or not os.path.exists(sessions_path):
         return {}
     with open(sessions_path,'rb') as f:
         data = pickle.load(f)
@@ -179,8 +196,12 @@ def export_data():
         for u in data['accounts']:
             name = f" {u.get('first_name','')} {u.get('last_name','')}".strip()
             out.append(f"{u['username']}{name}")
-    path=os.path.join(get_user_dir(),"export.txt")
-    with open(path,"w") as f: f.write("\n".join(out))
+    user_dir = get_user_dir()
+    if not user_dir:
+        return jsonify({'error':'no user selected'}), 400
+    path=os.path.join(user_dir,"export.txt")
+    with open(path,"w") as f:
+        f.write("\n".join(out))
     return send_file(path,as_attachment=True,download_name="export.txt")
 
 @accounts_bp.route('/user_action', methods=['POST'])

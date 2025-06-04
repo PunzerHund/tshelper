@@ -31,6 +31,8 @@ def login():
         user = users.get(username)
         if user and user['password'] == password:
             session['user'] = {'name': username, 'role': user['role']}
+            if user['role'] == 'admin':
+                session['selected_client'] = ''
             return redirect(url_for('dashboard.index'))
         flash('Неверный логин/пароль')
     return render_template('login.html', title='Вход')
