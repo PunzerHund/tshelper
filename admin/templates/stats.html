@@ -13,6 +13,21 @@
         <textarea id="message_text" name="message_text" class="form-control" rows="9"></textarea>
       </div>
       <div class="mb-3">
+        <label for="template_select" class="form-label">Шаблоны</label>
+        <div class="input-group">
+          <select id="template_select" class="form-select">
+            <option selected disabled value="">Выберите...</option>
+            {% for t in templates %}
+              <option value="{{ loop.index0 }}">{{ t.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-outline-secondary" id="load-template">Загрузить</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="showSaveTemplate(false)">Сохранить</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="showSaveTemplate(true)">Редактировать</button>
+          <button type="button" class="btn btn-outline-danger" id="delete-template">Удалить</button>
+        </div>
+      </div>
+      <div class="mb-3">
         <input class="form-check-input me-2" type="checkbox" id="select-all-global">
         <label class="form-check-label fw-bold" for="select-all-global">Отправить всем</label>
       </div>
@@ -61,6 +76,23 @@
         {% endfor %}
       </div>
       <button type="submit" class="btn btn-primary">Разослать</button>
+      <button type="button" class="btn btn-secondary ms-2" id="open-schedule">Запланировать</button>
+    </form>
+
+    <form method="post" action="{{ url_for('stats.schedule_broadcast') }}" id="schedule-form" class="mt-3" style="display:none;">
+      <input type="hidden" name="name">
+      <input type="hidden" name="message_text">
+      <div id="schedule-selected-container"></div>
+      <div class="mb-2">
+        <label class="form-label">Дата отправки</label>
+        <input type="date" name="send_date" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Время отправки</label>
+        <input type="time" name="send_time" class="form-control" required>
+      </div>
+      <button type="button" class="btn btn-success" id="schedule-submit">Создать задачу</button>
+      <button type="button" class="btn btn-link" id="cancel-schedule">Отмена</button>
     </form>
 
     {% if send_results %}
@@ -110,6 +142,24 @@
   </div>
   <div class="col-lg-4">
     <div class="sticky-top" style="top:1.5rem;">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header fw-bold">Запланированные</div>
+        <div class="card-body" style="max-height:40vh; overflow-y:auto;">
+          {% if scheduled %}
+            <ul class="list-group list-group-flush">
+            {% for s in scheduled %}
+              <li class="list-group-item">
+                <div class="small text-muted">{{ s.send_at }}</div>
+                <div><b>{{ s.name|default('-') }}</b></div>
+                <div class="small">{{ s.text[:40] }}{% if s.text|length > 40 %}...{% endif %}</div>
+              </li>
+            {% endfor %}
+            </ul>
+          {% else %}
+            <span class="text-muted">Нет запланированных рассылок.</span>
+          {% endif %}
+        </div>
+      </div>
       <div class="card shadow-sm">
         <div class="card-header fw-bold">
           История рассылок
@@ -186,4 +236,88 @@
     </div>
   </div>
 {% endfor %}
+
+<div class="modal fade" id="templateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="templateForm" method="post">
+        <div class="modal-header">
+          <h5 class="modal-title">Шаблон</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Имя</label>
+            <input type="text" name="tpl_name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Текст</label>
+            <textarea name="tpl_text" class="form-control" rows="6" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('load-template').onclick = function(){
+    const idx = document.getElementById('template_select').value;
+    if(idx === '' || idx === null) return;
+    const tpl = {{ templates|tojson }}[idx];
+    document.getElementById('message_text').value = tpl.text;
+    document.getElementById('name').value = tpl.name;
+  };
+  document.getElementById('delete-template').onclick = function(){
+    const idx = document.getElementById('template_select').value;
+    if(idx=== ''||idx===null) return;
+    const f = document.createElement('form');
+    f.method='post';
+    f.action='{{ url_for('stats.delete_template', idx=0) }}'.replace('0', idx);
+    document.body.appendChild(f);
+    f.submit();
+  };
+  function showSaveTemplate(edit){
+    const modal = new bootstrap.Modal(document.getElementById('templateModal'));
+    const form = document.getElementById('templateForm');
+    form.action = edit ? '{{ url_for('stats.edit_template', idx=0) }}'.replace('0', document.getElementById('template_select').value||0)
+                       : '{{ url_for('stats.create_template') }}';
+    if(edit){
+      const idx = document.getElementById('template_select').value;
+      if(idx === '' || idx === null) return;
+      const tpl = {{ templates|tojson }}[idx];
+      form.tpl_name.value = tpl.name;
+      form.tpl_text.value = tpl.text;
+    }else{
+      form.tpl_name.value='';
+      form.tpl_text.value=document.getElementById('message_text').value;
+    }
+    modal.show();
+  }
+  document.getElementById('open-schedule').onclick = function(){
+    document.getElementById('schedule-form').style.display='block';
+  };
+  document.getElementById('cancel-schedule').onclick = function(){
+    document.getElementById('schedule-form').style.display='none';
+  };
+  document.getElementById('schedule-submit').onclick = function(){
+    const form = document.getElementById('schedule-form');
+    form.querySelector('input[name="name"]').value = document.getElementById('name').value;
+    form.querySelector('input[name="message_text"]').value = document.getElementById('message_text').value;
+    const cont = document.getElementById('schedule-selected-container');
+    cont.innerHTML='';
+    document.querySelectorAll('.user-checkbox:checked').forEach(cb=>{
+      const inp=document.createElement('input');
+      inp.type='hidden';
+      inp.name='selected';
+      inp.value=cb.value;
+      cont.appendChild(inp);
+    });
+    form.submit();
+  };
+</script>
 {% endblock %}
